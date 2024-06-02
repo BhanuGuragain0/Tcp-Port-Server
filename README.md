@@ -15,7 +15,10 @@ This repository contains an enhanced version of a secure TCP server implemented 
 
 1. **Running the Server**:
 
-python port_server.py --port PORT --certfile CERTFILE --keyfile KEYFILE [--config CONFIG_FILE] [--max-workers MAX_WORKERS]
+`python port_server.py --port <PORT> --certfile CERTFILE --keyfile <KEYFILE> --config <CONFIG_FILE> --max-workers <MAX_WORKERS>`
+or
+`python port_server.py --port <PORT> --certfile CERTFILE --keyfile <KEYFILE> --config <CONFIG_FILE>`
+
 
 for checking kali linux --- `netstat -tuln`
 
