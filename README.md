@@ -15,7 +15,15 @@ This repository contains an enhanced version of a secure TCP server implemented 
 
 1. **Running the Server**:
 
-python server.py --port PORT --certfile CERTFILE --keyfile KEYFILE [--config CONFIG_FILE] [--max-workers MAX_WORKERS]
+python port_server.py --port PORT --certfile CERTFILE --keyfile KEYFILE [--config CONFIG_FILE] [--max-workers MAX_WORKERS]
+
+for checking kali linux --- `netstat -tuln`
+
+In order to set up a secure connection (TLS/SSL), you need to have a valid SSL certificate and its corresponding private key. These files are typically provided by a Certificate Authority (CA) or can be self-signed for testing purposes.
+
+If you don't have these files yet, you'll need to generate them or obtain them from a trusted source. Here's a brief overview of how you can generate self-signed SSL certificate and key pair using OpenSSL:
+
+`openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365`
 
 markdown
 
