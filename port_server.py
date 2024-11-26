@@ -7,8 +7,9 @@ import bcrypt
 import json
 from concurrent.futures import ThreadPoolExecutor
 from logging.handlers import RotatingFileHandler
-from functools import partial
+from sympy import sympify, SympifyError
 
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     handlers=[RotatingFileHandler("server.log", maxBytes=5 * 1024 * 1024, backupCount=2)],
@@ -20,7 +21,7 @@ COMMANDS = {
     "upper": lambda data: data.upper(),
     "lower": lambda data: data.lower(),
     "reverse": lambda data: data[::-1],
-    "math": lambda data: str(eval(data))  # Dangerous without sanitization
+    "math": lambda data: str(sympify(data)),  # Safe math evaluation using sympy
 }
 
 class SecureServer:
@@ -40,33 +41,32 @@ class SecureServer:
     async def handle_client(self, ssl_socket, client_address):
         logging.info(f"Connected to {client_address}")
         try:
-            await ssl_socket.sendall(b"Enter passphrase: ")
-            passphrase = await asyncio.wait_for(ssl_socket.recv(1024), timeout=10)
-            
-            if not bcrypt.checkpw(passphrase.strip(), self.passphrase_hash):
-                await ssl_socket.sendall(b"Invalid passphrase!")
+            await self.send_message(ssl_socket, "Enter passphrase: ")
+            passphrase = await self.receive_message(ssl_socket)
+            if not bcrypt.checkpw(passphrase.encode(), self.passphrase_hash):
+                await self.send_message(ssl_socket, "Invalid passphrase!")
                 logging.warning(f"Invalid passphrase from {client_address}")
                 return
 
-            await ssl_socket.sendall(b"Passphrase accepted. Welcome!")
+            await self.send_message(ssl_socket, "Passphrase accepted. Welcome!")
             session_commands = []
 
             while True:
-                await ssl_socket.sendall(b"Enter command: ")
-                data = await asyncio.wait_for(ssl_socket.recv(1024), timeout=10)
-                if not data:
+                await self.send_message(ssl_socket, "Enter command: ")
+                command_data = await self.receive_message(ssl_socket)
+                if not command_data:
                     break
 
-                command_data = data.decode().strip()
                 if command_data.lower() == "quit":
+                    await self.send_message(ssl_socket, "Goodbye!")
                     break
                 elif command_data.lower() == "history":
-                    response = "\n".join(session_commands).encode()
+                    response = "\n".join(session_commands)
                 else:
                     session_commands.append(command_data)
-                    response = self.process_command(command_data).encode()
+                    response = self.process_command(command_data)
 
-                await ssl_socket.sendall(response)
+                await self.send_message(ssl_socket, response)
         except asyncio.TimeoutError:
             logging.warning(f"Client {client_address} timed out.")
         except Exception as e:
@@ -75,14 +75,23 @@ class SecureServer:
             ssl_socket.close()
             logging.info(f"Connection closed for {client_address}")
 
+    async def send_message(self, ssl_socket, message):
+        ssl_socket.sendall(message.encode() + b"\n")
+
+    async def receive_message(self, ssl_socket, buffer_size=1024):
+        data = ssl_socket.recv(buffer_size).decode().strip()
+        return data
+
     def process_command(self, data):
         try:
             command, *args = data.split()
             if command in COMMANDS:
-                return COMMANDS[command](" ".join(args))
-            return "Unknown command"
+                return json.dumps({"result": COMMANDS[command](" ".join(args))})
+            return json.dumps({"error": "Unknown command"})
+        except SympifyError:
+            return json.dumps({"error": "Invalid mathematical expression"})
         except Exception as e:
-            return f"Error processing command: {e}"
+            return json.dumps({"error": f"Error processing command: {e}"})
 
     async def start_server(self):
         server_socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
@@ -100,6 +109,8 @@ class SecureServer:
                 asyncio.create_task(self.handle_client(ssl_socket, client_address))
         except KeyboardInterrupt:
             logging.info("Server shutdown initiated...")
+        except Exception as e:
+            logging.error(f"Server encountered an error: {e}")
         finally:
             server_socket.close()
 
